@@ -1,0 +1,66 @@
+---
+
+# - name: Import the public GPG key
+#   rpm_key:
+#     key: https://artifacts.opensearch.org/publickeys/opensearch.pgp
+#     state: present
+
+- name: Create a repository file for OpenSearch
+  get_url:
+    url: https://artifacts.opensearch.org/releases/bundle/opensearch-dashboards/2.x/opensearch-dashboards-2.x.repo
+    dest: /etc/yum.repos.d/opensearch-dashboards-2.x.repo
+    mode: 0644
+    owner: root
+    group: root
+  register: opensearch_yum_repository
+
+- name: Clean YUM cache
+  command: yum clean all
+  when: opensearch_yum_repository.changed
+
+- name: Install OpenSearch Dashboard package
+  yum:
+    name: "opensearch-dashboards-{{ opensearch_dashboards_version }}"
+    state: present
+
+- name: Overlay opensearch_dashboards_config on top of defaults
+  set_fact:
+    opensearch_dashboards_config: '{{ opensearch_dashboards_config_default | combine(config_layer, recursive=True) }}'
+  vars:
+    config_layer: '{{ opensearch_dashboards_config | default({}) }}'
+
+- name: Provide OpenSearch Dashboard configuration file
+  template:
+    src: etc/opensearch-dashboards/opensearch_dashboards.yml.j2
+    dest: "{{ opensearch_dashboards_config_directory }}/opensearch_dashboards.yml"
+    owner: opensearch-dashboards
+    group: opensearch-dashboards
+    mode: 0640
+  notify:
+    - restart opensearch-dashboards
+
+- name: Create directory for TLS certificates
+  file:
+    path: "{{ opensearch_dashboards_config_directory }}/certs"
+    state: directory
+    owner: opensearch-dashboards
+    group: opensearch-dashboards
+    mode: 0500
+
+- name: Provide TLS certificates
+  copy:
+    content: "{{ item.content }}"
+    dest: "{{ opensearch_dashboards_config_directory }}/certs/{{ item.filename }}"
+    owner: opensearch-dashboards
+    group: opensearch-dashboards
+    mode: 0400
+  with_items:
+    - "{{ opensearch_root_ca_certificate }}"
+    - "{{ opensearch_dashboards_certificate }}"
+    - "{{ opensearch_dashboards_key }}"
+
+- name: Ensure opensearch-dashboards service is started and enabled on boot
+  service:
+    name: opensearch-dashboards
+    state: started
+    enabled: true

@@ -1,0 +1,4 @@
+---
+{{ ansible_managed | comment }}
+
+{{ opensearch_dashboards_config | to_nice_yaml(indent=2) }}
