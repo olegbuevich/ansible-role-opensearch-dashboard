@@ -1,6 +1,6 @@
 ---
 
-- name: restart opensearch-dashboards
-  service:
+- name: Restart opensearch-dashboards
+  ansible.builtin.service:
     name: opensearch-dashboards
     state: restarted
